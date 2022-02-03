@@ -1,0 +1,15 @@
+[
+	{		
+		"queue_name": "QName1",
+		"queue_consumer_tag": "consumerTag1",		
+		"command_name": "discoverDarkSide"		
+	},
+	
+	
+	{		
+		"queue_name": "QName2",	
+		"queue_consumer_tag": "consumerTag2",	
+		"command_name": "discoverDarkSide2"		
+	}
+	
+]

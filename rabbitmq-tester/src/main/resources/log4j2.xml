@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration xmlns="http://logging.apache.org/log4j/2.0/config" status="WARN" monitorInterval="30">
+
+	<Properties>
+		<Property name="log-path">/opt/robosoc/mng/logs</Property>
+		<Property name="log-name-prefix">mng</Property>
+		<Property name="log-pattern">%d{yyyy-MM-dd HH:mm:ss} | %-5p | [%t] %C{2} (%F:%L) - %m%n</Property>
+	</Properties>
+
+    <Appenders>
+        
+        <Console name="console" target="SYSTEM_OUT" follow="true">
+            <PatternLayout pattern="${log-pattern}"/>
+        </Console>
+        
+        <RollingFile name="info-log" fileName="${log-path}/${log-name-prefix}-info.log" filePattern="${log-path}/${log-name-prefix}-info-%d{yyyy-MM-dd}-%i.log" >
+        	<LevelRangeFilter minLevel="INFO" maxLevel="INFO" onMatch="ACCEPT" onMismatch="DENY"/>
+        	<PatternLayout pattern="${log-pattern}"/>
+			<Policies>
+				<SizeBasedTriggeringPolicy size="10 MB" />
+			</Policies>
+			<DefaultRolloverStrategy max="10"/>
+		</RollingFile>
+		
+		<RollingFile name="trace-log" fileName="${log-path}/${log-name-prefix}-trace.log" filePattern="${log-path}/${log-name-prefix}-trace-%d{yyyy-MM-dd}-%i.log" >
+        	<LevelRangeFilter minLevel="TRACE" maxLevel="TRACE" onMatch="ACCEPT" onMismatch="DENY"/>
+        	<PatternLayout pattern="${log-pattern}"/>
+			<Policies>
+				<SizeBasedTriggeringPolicy size="10 MB" />
+			</Policies>
+			<DefaultRolloverStrategy max="10"/>
+		</RollingFile>
+        
+        <RollingFile name="debug-log" fileName="${log-path}/${log-name-prefix}-debug.log" filePattern="${log-path}/${log-name-prefix}-debug-%d{yyyy-MM-dd}-%i.log" >
+        	<LevelRangeFilter minLevel="DEBUG" maxLevel="DEBUG" onMatch="ACCEPT" onMismatch="DENY"/>
+        	<PatternLayout pattern="${log-pattern}"/>
+			<Policies>
+				<SizeBasedTriggeringPolicy size="10 MB" />
+			</Policies>
+			<DefaultRolloverStrategy max="10"/>
+		</RollingFile>
+		
+		<RollingFile name="warn-log" fileName="${log-path}/${log-name-prefix}-warn.log" filePattern="${log-path}/${log-name-prefix}-warn-%d{yyyy-MM-dd}-%i.log" >
+        	<LevelRangeFilter minLevel="WARN" maxLevel="WARN" onMatch="ACCEPT" onMismatch="DENY"/>
+			<PatternLayout pattern="${log-pattern}"/>
+			<Policies>
+				<SizeBasedTriggeringPolicy size="10 MB" />
+			</Policies>
+			<DefaultRolloverStrategy max="10"/>
+		</RollingFile>
+		
+		<RollingFile name="error-log" fileName="${log-path}/${log-name-prefix}-error.log" filePattern="${log-path}/${log-name-prefix}-error-%d{yyyy-MM-dd}-%i.log" >
+        	<LevelRangeFilter minLevel="ERROR" maxLevel="ERROR" onMatch="ACCEPT" onMismatch="DENY"/>
+			<PatternLayout pattern="${log-pattern}"/>
+			<Policies>
+				<SizeBasedTriggeringPolicy size="10 MB" />
+			</Policies>
+			<DefaultRolloverStrategy max="10"/>
+		</RollingFile>
+		
+		<RollingFile name="upgrade-log" fileName="${log-path}/upgrade.log" filePattern="${log-path}/upgrade-%d{yyyy-MM-dd}-%i.log" >
+			<PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss} | %-5p | %m%n"/>
+			<Policies>
+				<SizeBasedTriggeringPolicy size="10 MB" />
+			</Policies>
+			
+			<DefaultRolloverStrategy max="10"/>
+		</RollingFile>
+		
+    </Appenders>
+    
+
+    <Loggers>
+        
+        <Logger name="com.cybear" additivity="false">
+        	<AppenderRef ref="console"/>
+        	<AppenderRef ref="trace-log"/>
+        	<AppenderRef ref="debug-log"/>
+        	<AppenderRef ref="info-log"/>
+        	<AppenderRef ref="warn-log"/>
+        	<AppenderRef ref="error-log"/>
+        </Logger>
+        
+        <Logger name="com.cybear.web.command.UpgradeVersionCommand" level="info" additivity="true">
+		 	<AppenderRef ref="upgrade-log"/>
+		</Logger>
+        
+        <Root level="info">
+            <AppenderRef ref="console"/>
+        </Root>
+        
+    </Loggers>
+
+</Configuration>

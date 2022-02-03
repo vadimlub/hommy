@@ -1,0 +1,10 @@
+# scopes: 
+    - name: scopeA
+      commands:
+        - commandA
+        - commandC
+    - name: scopeB
+      commands:
+        - commandB
+        - commandC
+    
