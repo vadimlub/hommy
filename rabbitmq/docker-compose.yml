@@ -1,0 +1,27 @@
+version: "3.0"
+services:
+    rabbitmq:
+        hostname: "rabbitmq-dev"        
+        environment:
+            RABBITMQ_ERLANG_COOKIE: "SWQOKODSQALRPCLNMEQG"
+            RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbitmq_stream advertised_host localhost"
+            RABBITMQ_DEFAULT_USER: "robosoc_dev"
+            RABBITMQ_DEFAULT_PASS: "A123456a!"
+            RABBITMQ_DEFAULT_VHOST: "dev"
+        image: rabbitmq:3.9-management
+        container_name: 'robosoc-rabbitmq'
+        restart: always
+        ports:
+            - 5672:5672
+            - 15672:15672
+            - 5552:5552
+        volumes:
+            - '~/.docker-conf/rabbitmq/data/:/var/lib/rabbitmq/mnesia/'
+            - "./enabled_plugins:/etc/rabbitmq/enabled_plugins"
+            - "./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro"
+        networks:
+            - dev-network
+
+networks:
+    dev-network:
+        driver: bridge           

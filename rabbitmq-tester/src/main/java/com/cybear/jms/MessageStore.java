@@ -3,13 +3,24 @@
  */
 package com.cybear.jms;
 
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Iterator;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
+import java.util.stream.IntStream;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -18,11 +29,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.stream.Consumer;
+import com.rabbitmq.stream.Environment;
+import com.rabbitmq.stream.Message;
+import com.rabbitmq.stream.OffsetSpecification;
+import com.rabbitmq.stream.Producer;
+import com.rabbitmq.stream.impl.Client;
+import com.rabbitmq.stream.impl.Client.ClientParameters;
 
+public class MessageStore {
 
-public class MessageStore {	
-	
-	private static final Logger logger = LogManager.getLogger(MessageStore.class);	
+	private static final Logger logger = LogManager
+			.getLogger(MessageStore.class);
 	private static final String EXCHANGE_NAME = "robosoc.scopes";
 	private static final String QUEUE_SCOPE = "queue_scope";
 	private static final String QUEUE_NAME = "queue_name";
@@ -33,76 +51,306 @@ public class MessageStore {
 	private static final MessageStore instance = new MessageStore();
 	private static final ConnectionFactory connectionFactory = new ConnectionFactory();
 	private static Connection con = null;
-	private static Channel channel = null;	
-	
-	List<Map<String, Object>> configList = null;	
-    
-    private MessageStore() {
-    	super();
-    }
-    
-    public static MessageStore getInstance() {
-    	return instance;
-    }
-    
-    @SuppressWarnings("unchecked")
-	public void init() throws Exception {    	  
-    	InputStream is = ClassLoader.getSystemResourceAsStream("conf-mq.json");
-    	ObjectMapper objectMapper = new ObjectMapper();
-    	configList = objectMapper.readValue(is,List.class);    	
-    	logger.debug("MessageStore init connection");
-    	try { 
-    		con = connectionFactory.newConnection();
-    		channel = con.createChannel();    	
-    		channel.exchangeDeclare(EXCHANGE_NAME, "topic"); 
-    		configList.stream().forEach(this::initTopic);    		    			
-    	} catch(Exception e) {
-    		logger.error("error init message store", e);
-    	}    	    		
-    }    
-    
-    private void initConsumer(String consumerTag, String queueName, String commandName) throws IOException {    	
-    	channel.basicConsume(queueName, true, consumerTag, new RobosocCommandConsumer(channel, commandName));
-    	logger.debug("init consumer {} queueName {} CommandName {}", consumerTag, queueName, commandName);
-    }
-    
-    public void publishMessage(String routingKey, String msg) throws IOException
-    {
-    	channel.basicPublish(EXCHANGE_NAME, routingKey, null, msg.getBytes("UTF-8"));
-    }
-    
-    
-    @SuppressWarnings("unchecked")
-	private void initTopic(Map<String, Object> map)
-    {    	
-    	
-    	String queueName = String.valueOf(map.get(QUEUE_NAME));
-    	String consumerTag = String.valueOf(map.get(QUEUE_CONSUMER_TAG));
-    	String commandName = String.valueOf(map.get(COMMAND_NAME));    	
+	private static Channel channel = null;
+	private static Environment env = null;
+	private static Producer producer = null;
+
+	Map<String, Object> configList = null;
+
+	private MessageStore() {
+		super();
+	}
+
+	public static MessageStore getInstance() {
+		return instance;
+	}
+
+	@SuppressWarnings("unchecked")
+	public void init() throws Exception {
+		InputStream is = ClassLoader.getSystemResourceAsStream("conf-mq.json");
+		ObjectMapper objectMapper = new ObjectMapper();
+		configList = objectMapper.readValue(is, Map.class);
+		logger.info("MessageStore init connection");
+		try {
+			connectionFactory
+					.setUri("amqp://robosoc_dev:A123456a!@localhost:5672/dev");
+			connectionFactory.setRequestedFrameMax(15242880);
+			con = connectionFactory.newConnection();
+			channel = con.createChannel();
+			channel.exchangeDeclare(EXCHANGE_NAME, "topic");
+			channel.basicQos(10);
+			((List<Map<String, Object>>) configList.get("queues")).stream()
+					.forEach(this::initTopic);
+			createStreamQueue("payload-stream");
+			
+			// handle stream queue environment object
+			// env =
+			// Environment.builder().uri("rabbitmq-stream://localhost:5552").build();
+			// create steam queue
+			// createStream("robosoc-stream");
+			// init stream producer
+			// producer =
+			// env.producerBuilder().stream("robosoc-stream").build();
+
+		} catch (Exception e) {
+			logger.error("error init message store", e);
+		}
+	}
+
+	private void createStream(String streamName) throws IOException {
+		env.streamCreator().stream(streamName).create();
+	}
+
+	private void initConsumer(String consumerTag, String queueName,
+			String commandName) throws IOException {
+		boolean autoAck = false;
+		channel.basicConsume(queueName, autoAck, consumerTag,
+				new RobosocCommandConsumer(channel, commandName));
+		logger.debug("init consumer {} queueName {} CommandName {}",
+				consumerTag, queueName, commandName);
+	}
+
+	public void publishMessage(String routingKey, byte [] msg)
+			throws IOException {
+		channel.basicPublish(EXCHANGE_NAME, routingKey, null, msg);
+	}
+
+	public void streamMessage(int msgId, byte[] bytes) {
+		Message message = producer.messageBuilder().properties()
+				.creationTime(System.currentTimeMillis()).messageId(msgId)
+				.messageBuilder().addData(bytes).build();
+		producer.send(message, confirmationStatus -> logger
+				.debug("Stream message was sent id: {}", msgId));
+	}
+
+	public void consumeStreamMessage(int msgId, String streamName) {
+		Consumer consumer = Environment.builder()
+				.uri("rabbitmq-stream://localhost:5552").build()
+				.consumerBuilder().stream(streamName) // stream to consume from
+				.offset(OffsetSpecification.offset(msgId)) // where to start
+															// consuming
+				.messageHandler((context, message) -> logger.debug(
+						"Stream message recieved: {}",
+						new String(message.getBodyAsBinary()))) // behavior
+				.build();
+	}
+
+	@SuppressWarnings("unchecked")
+	private void initTopic(Map<String, Object> map) {
+		String queueName = String.valueOf(map.get(QUEUE_NAME));
+		String consumerTag = String.valueOf(map.get(QUEUE_CONSUMER_TAG));
+		String commandName = String.valueOf(map.get(COMMAND_NAME));
 		try {
 			createQueue(queueName);
 			initConsumer(consumerTag, queueName, commandName);
-		} catch(IOException e) {
-			logger.error("error in initConsumer part in MessageStore:initTopic", e);
-		}    	
-    }
-    
-    
-    private void createQueue(String queueName) throws IOException
-    {    
-		String q = channel.queueDeclare(queueName, true, false, false, null).getQueue();
+		} catch (IOException e) {
+			logger.error("error in initConsumer part in MessageStore:initTopic",
+					e);
+		}
+	}
+
+	private void createQueue(String queueName) throws IOException {		
+		String q = channel.queueDeclare(queueName, true, false, false, null)
+				.getQueue();
 		channel.queueBind(q, EXCHANGE_NAME, queueName);
-		logger.debug("queueName: {}", queueName);    	
-    }
-    
-    
-    public boolean someLibraryMethod() {
-        return true;
-    }
-    
-    public static void main(String[] args) throws Exception {
+		logger.debug("queueName: {}", queueName);
+	}
+
+	private void createStreamQueue(String queueName) throws IOException {
+		// Create stream queue with amqp 1.0 protocol - without stream api acts
+	    // as a regular queue without desctructive manners
+		String q = channel.queueDeclare(queueName, true, false, false,
+					Collections.singletonMap("x-queue-type", "stream")).getQueue();
+		channel.queueBind(q, EXCHANGE_NAME, queueName);
+		logger.debug("Stream QueueName: {}", queueName);
+	}
+
+	public boolean someLibraryMethod() {
+		return true;
+	}
+
+	public static class MQContext {
+
+	}
+
+	public static void main(String[] args) throws Exception {
+
+		MessageStore.getInstance().init();
+
+		// MessageStore.getInstance().streamMessage(1,
+		// "HelloWorld1".getBytes());
+		// MessageStore.getInstance().streamMessage(2,
+		// "HelloWorld2".getBytes());
+		// MessageStore.getInstance().streamMessage(3,
+		// "HelloWorld3".getBytes());
+		// MessageStore.getInstance().consumeStreamMessage(1, "robosoc-stream");
+		// MessageStore.getInstance().consumeStreamMessage(2, "robosoc-stream");
+		// MessageStore.getInstance().consumeStreamMessage(3, "robosoc-stream");
 		
-    	MessageStore.getInstance().init();    	
-	}    
-    
+		/*
+		FileInputStream fos = new FileInputStream("d:\\develop\\temp\\sys.data");
+		byte [] data = fos.readAllBytes();
+		fos.close();
+		MessageStore.getInstance().init();
+		
+		Thread.sleep(1000);
+		
+		DataInjector.main(null);
+		*/
+		
+		/*
+		IntStream.range(1, 100).forEach(i -> {
+			try {
+				MessageStore.getInstance().publishMessage("QName1", data);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		});
+		*/
+		
+
+	}
+	
+
+	public static class Publish {
+
+		public static void main(String[] args) throws Exception {
+			logger.info("Connecting...");
+			try (Environment environment = Environment.builder()									
+					.uri("rabbitmq-stream://robosoc_dev:A123456a!@localhost:5552/dev")
+					.requestedMaxFrameSize(15242880)
+					.build()) {
+					
+				logger.info("Connected");				
+				logger.info("Creating stream...");		
+				
+				/*
+				environment.streamCreator().stream("payload-stream").						
+						.create();
+				*/
+				logger.info("Stream created");
+
+				logger.info("Creating producer...");				
+				Producer producer = environment.producerBuilder()
+						.stream("payload-stream")
+						.build();				
+				logger.info("Producer created");
+
+				long start = System.currentTimeMillis();
+				int messageCount = 10;
+				CountDownLatch confirmLatch = new CountDownLatch(messageCount);
+				final byte[] data;
+				FileInputStream fos = null;
+				
+				fos = new FileInputStream("d:\\develop\\temp\\sys.data");
+				data = fos.readAllBytes();
+				fos.close();
+				
+				logger.info("Sending {} messages", messageCount);
+				IntStream.range(1, messageCount + 1).forEach(i -> {
+					logger.info("upload index: {}", i);					
+					
+					Message message = producer.messageBuilder().properties()
+							.creationTime(System.currentTimeMillis())
+							.messageId(i).messageBuilder().addData(data)
+							.build();
+					producer.send(message,
+							confirmationStatus -> confirmLatch.countDown());
+				});
+				logger.info("Messages sent, waiting for confirmation...");
+				boolean done = confirmLatch.await(1, TimeUnit.MINUTES);
+				logger.info("All messages confirmed? {} ({} ms)", done ? "yes" : "no",
+						(System.currentTimeMillis() - start));
+				logger.info("Closing environment...");
+			}
+			logger.info("Environment closed");
+		}
+	}
+
+	public static class Consume {
+
+		public static void main(String[] args) throws Exception {
+			logger.info("Connecting...");
+			try (Environment environment = Environment.builder()
+					.uri("rabbitmq-stream://robosoc_dev:A123456a!@localhost:5552/dev").build()) {
+
+				logger.info("Connected");
+
+				AtomicInteger messageConsumed = new AtomicInteger(0);
+				long start = System.currentTimeMillis();
+				logger.info("Start consumer...");
+				Consumer consumer = environment.consumerBuilder()
+						.stream("payload-stream").offset(OffsetSpecification.offset(0))						
+						.messageHandler((context, message) -> {
+								messageConsumed.incrementAndGet(); 
+								logger.info("get message index: {} value: {}", messageConsumed.get(), new String(message.getProperties().getMessageIdAsString()));
+						})
+						.build();
+
+				Utils.waitAtMost(60, () -> messageConsumed.get() >= 10);
+				logger.debug("Consumed {} messages in {} ms",
+						messageConsumed.get(),
+						(System.currentTimeMillis() - start));
+				logger.debug("Closing environment...");
+			}
+			logger.info("Environment closed");
+		}
+	}
+
+	public class Utils {
+
+		public static Duration waitUntil(BooleanSupplier condition)
+				throws InterruptedException {
+			return waitAtMost(10, condition, null);
+		}
+
+		public static Duration waitAtMost(int timeoutInSeconds,
+				BooleanSupplier condition) throws InterruptedException {
+			return waitAtMost(timeoutInSeconds, condition, null);
+		}
+
+		static Duration waitAtMost(int timeoutInSeconds,
+				BooleanSupplier condition, Supplier<String> message)
+				throws InterruptedException {
+			if (condition.getAsBoolean()) {
+				return Duration.ZERO;
+			}
+			int waitTime = 100;
+			int waitedTime = 0;
+			int timeoutInMs = timeoutInSeconds * 1000;
+			while (waitedTime <= timeoutInMs) {
+				Thread.sleep(waitTime);
+				waitedTime += waitTime;
+				if (condition.getAsBoolean()) {
+					return Duration.ofMillis(waitedTime);
+				}
+			}
+			if (message == null) {
+				throw new IllegalStateException("Waited " + timeoutInSeconds
+						+ " second(s), condition never got true");
+			} else {
+				throw new IllegalStateException("Waited " + timeoutInSeconds
+						+ " second(s), " + message.get());
+			}
+		}
+	}
+	
+	public class DataInjector {
+		
+		public static void main(String[] args) throws IOException {
+			FileInputStream fos = new FileInputStream("d:\\develop\\temp\\sys.data");
+			byte [] data = fos.readAllBytes();
+			fos.close();
+			IntStream.range(1, 100).forEach(i -> {
+				try {
+					MessageStore.getInstance().publishMessage("QName1", data);
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			});			
+		}
+	}
+
 }

@@ -1,0 +1,25 @@
+curl --silent --output docker-compose.yml https://raw.githubusercontent.com/confluentinc/cp-all-in-one/7.0.1-post/cp-all-in-one/docker-compose.yml
+
+
+#kAFKA sql Query
+
+CREATE TABLE commands1 (taskStartTime BIGINT, taskid VARCHAR PRIMARY KEY, taskExecModule VARCHAR, status VARCHAR, timeStamp VARCHAR, depTaskId ARRAY<STRING>) WITH (KAFKA_TOPIC='command1', VALUE_FORMAT='JSON');
+
+
+
+CREATE STREAM TASKS (taskStartTime BIGINT, taskid VARCHAR, taskExecModule VARCHAR, timeStamp VARCHAR) WITH (KAFKA_TOPIC='command1', VALUE_FORMAT='JSON');
+
+
+
+select * from COMMANDS1 WHERE TASKID='54099f5f-9ee6-4673-90fd-e41d28c40988' EMIT CHANGES LIMIT 2;
+
+
+
+
+
+
+
+
+
+
+

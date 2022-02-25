@@ -24,7 +24,7 @@ public class RobosocCommandConsumer extends DefaultConsumer {
 	Logger logger = LogManager.getLogger(RobosocCommandConsumer.class);
 	int min = 1;
 	int max = 5;
-	int threadNumber = 5;
+	int threadNumber = 20;
 	
 	final ExecutorService threadPool =  Executors.newFixedThreadPool(threadNumber);
 	
@@ -47,7 +47,9 @@ public class RobosocCommandConsumer extends DefaultConsumer {
         MessageCommand command = new MessageCommand(consumerTag, deliveryTag, routingKey, body);   
         //CommandExecuter.getInstance().execute(consumerTag, commandName, new String(body, "UTF-8"));
         //Future<Integer> res = execute(consumerTag, commandName, new String(body));
-        execute(consumerTag, commandName, new String(body));
+        execute(consumerTag, commandName, body);
+        getChannel().basicAck(deliveryTag, false);
+        
         /*
         try {
 			logger.debug("CommandExceuter Done exec: {} within {} millis", commandName, res.get());
@@ -78,11 +80,11 @@ public class RobosocCommandConsumer extends DefaultConsumer {
 		logger.debug("Handle consume ok {}", consumerTag);
 	}
 	
-	public Future<Integer> execute(String consumerTag, String commandName, String payload) {		
+	public Future<Integer> execute(String consumerTag, String commandName, byte [] payload) {		
 		return threadPool.submit(() -> {				
 				long randMillis = getRandomNumber() * 1000;
 				long s = System.currentTimeMillis();
-				logger.debug("CommandExceuter start exec: commandName {} consumerTag {} payload {}", commandName, consumerTag, payload);			
+				logger.debug("CommandExceuter start exec: commandName {} consumerTag {}", commandName, consumerTag);			
 				Thread.sleep(randMillis);
 				long e = System.currentTimeMillis();	
 				logger.debug("CommandExceuter Done exec: {} within {} millis", commandName, e - s);
