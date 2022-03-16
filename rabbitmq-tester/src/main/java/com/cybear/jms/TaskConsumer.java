@@ -1,14 +1,9 @@
 package com.cybear.jms;
 
 import java.io.IOException;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -19,18 +14,18 @@ import com.rabbitmq.client.DefaultConsumer;
 import com.rabbitmq.client.Envelope;
 import com.rabbitmq.client.ShutdownSignalException;
 
-public class RobosocCommandConsumer extends DefaultConsumer {
-
-	Logger logger = LogManager.getLogger(RobosocCommandConsumer.class);
+public class TaskConsumer extends DefaultConsumer {
+	
+	Logger logger = LogManager.getLogger(TaskConsumer.class);
 	int min = 1;
 	int max = 5;
-	int threadNumber = 20;
+	int threadNumber = 5;
 	
 	final ExecutorService threadPool =  Executors.newFixedThreadPool(threadNumber);
 	
 	private String commandName = null;
 	
-	public RobosocCommandConsumer(Channel channel, String commandName) {
+	public TaskConsumer(Channel channel, String commandName) {
 		super(channel);
 		this.commandName = commandName;
 	}
@@ -47,9 +42,7 @@ public class RobosocCommandConsumer extends DefaultConsumer {
         MessageCommand command = new MessageCommand(consumerTag, deliveryTag, routingKey, body);   
         //CommandExecuter.getInstance().execute(consumerTag, commandName, new String(body, "UTF-8"));
         //Future<Integer> res = execute(consumerTag, commandName, new String(body));
-        execute(consumerTag, commandName, body);
-        //getChannel().basicAck(deliveryTag, false);
-        
+        execute(consumerTag, commandName, new String(body));
         /*
         try {
 			logger.debug("CommandExceuter Done exec: {} within {} millis", commandName, res.get());
@@ -80,11 +73,11 @@ public class RobosocCommandConsumer extends DefaultConsumer {
 		logger.debug("Handle consume ok {}", consumerTag);
 	}
 	
-	public Future<Integer> execute(String consumerTag, String commandName, byte [] payload) {		
+	public Future<Integer> execute(String consumerTag, String commandName, String payload) {		
 		return threadPool.submit(() -> {				
 				long randMillis = getRandomNumber() * 1000;
 				long s = System.currentTimeMillis();
-				logger.debug("CommandExceuter start exec: commandName {} consumerTag {}", commandName, consumerTag);			
+				logger.debug("CommandExceuter start exec: commandName {} consumerTag {} payload {}", commandName, consumerTag, payload);			
 				Thread.sleep(randMillis);
 				long e = System.currentTimeMillis();	
 				logger.debug("CommandExceuter Done exec: {} within {} millis", commandName, e - s);

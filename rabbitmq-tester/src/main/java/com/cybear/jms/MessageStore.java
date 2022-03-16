@@ -141,8 +141,7 @@ public class MessageStore {
 		String consumerTag = String.valueOf(map.get(QUEUE_CONSUMER_TAG));
 		String commandName = String.valueOf(map.get(COMMAND_NAME));
 		try {
-			createQueue(queueName);
-			initConsumer(consumerTag, queueName, commandName);
+			createQueue(queueName);			
 		} catch (IOException e) {
 			logger.error("error in initConsumer part in MessageStore:initTopic",
 					e);
@@ -176,6 +175,7 @@ public class MessageStore {
 	public static void main(String[] args) throws Exception {
 
 		MessageStore.getInstance().init();
+		MessageStore.getInstance().initConsumer("consumer1", "QName1", "Command1");
 
 		// MessageStore.getInstance().streamMessage(1,
 		// "HelloWorld1".getBytes());
@@ -238,7 +238,7 @@ public class MessageStore {
 				logger.info("Producer created");
 
 				long start = System.currentTimeMillis();
-				int messageCount = 10;
+				int messageCount = 100;
 				CountDownLatch confirmLatch = new CountDownLatch(messageCount);
 				final byte[] data;
 				FileInputStream fos = null;
@@ -281,14 +281,14 @@ public class MessageStore {
 				long start = System.currentTimeMillis();
 				logger.info("Start consumer...");
 				Consumer consumer = environment.consumerBuilder()
-						.stream("payload-stream").offset(OffsetSpecification.offset(0))						
+						.stream("payload-stream").offset(OffsetSpecification.offset(0))					
 						.messageHandler((context, message) -> {
 								messageConsumed.incrementAndGet(); 
 								logger.info("get message index: {} value: {}", messageConsumed.get(), new String(message.getProperties().getMessageIdAsString()));
 						})
 						.build();
 
-				Utils.waitAtMost(60, () -> messageConsumed.get() >= 10);
+				Utils.waitAtMost(60, () -> messageConsumed.get() >= 1000);
 				logger.debug("Consumed {} messages in {} ms",
 						messageConsumed.get(),
 						(System.currentTimeMillis() - start));
@@ -336,21 +336,6 @@ public class MessageStore {
 		}
 	}
 	
-	public class DataInjector {
-		
-		public static void main(String[] args) throws IOException {
-			FileInputStream fos = new FileInputStream("d:\\develop\\temp\\sys.data");
-			byte [] data = fos.readAllBytes();
-			fos.close();
-			IntStream.range(1, 100).forEach(i -> {
-				try {
-					MessageStore.getInstance().publishMessage("QName1", data);
-				} catch (IOException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-			});			
-		}
-	}
+	
 
 }

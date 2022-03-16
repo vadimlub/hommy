@@ -6,7 +6,7 @@ services:
             RABBITMQ_ERLANG_COOKIE: "SWQOKODSQALRPCLNMEQG"
             RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbitmq_stream advertised_host localhost"
             RABBITMQ_DEFAULT_USER: "robosoc_dev"
-            RABBITMQ_DEFAULT_PASS: "A123456a!"
+            RABBITMQ_DEFAULT_PASS: "V16021976l!#"
             RABBITMQ_DEFAULT_VHOST: "dev"
         image: rabbitmq:3.9-management
         container_name: 'robosoc-rabbitmq'
@@ -21,7 +21,11 @@ services:
             - "./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro"
         networks:
             - dev-network
-
+    redis:
+        image: redis:6.2-alpine
+        ports:
+          - 6379:6379
+        command: redis-server --save 60 1 --requirepass MDNcVb924a --loglevel warning
 networks:
     dev-network:
         driver: bridge           

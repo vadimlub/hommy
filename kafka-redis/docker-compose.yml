@@ -38,26 +38,8 @@ services:
       CONFLUENT_METRICS_ENABLE: 'true'
       CONFLUENT_SUPPORT_CUSTOMER_ID: 'anonymous'
       
-  ksqldb-server:
-    image: confluentinc/cp-ksqldb-server:7.0.1
-    hostname: ksqldb-server
-    depends_on:
-      - broker
+  redis:
+    image: redis:6.2-alpine
     ports:
-      - "8088:8088"
-    healthcheck:
-      test: curl -f http://ksqldb-server:8088/ || exit 1
-    environment:
-      KSQL_LISTENERS: http://0.0.0.0:8088
-      KSQL_BOOTSTRAP_SERVERS: broker:9092
-      KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE: "true"
-      KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: "true"
-
-  ksqldb-cli:
-    image: confluentinc/cp-ksqldb-cli:7.0.1
-    container_name: ksqldb-cli
-    depends_on:
-      - broker
-      - ksqldb-server
-    entrypoint: /bin/sh
-    tty: true
+      - 6379:6379
+    command: redis-server --save 60 1 --requirepass '' --loglevel warning
